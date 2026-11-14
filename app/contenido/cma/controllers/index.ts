@@ -1,0 +1,1 @@
+export { useCmaTabViewModel } from './useCmaTabViewModel'

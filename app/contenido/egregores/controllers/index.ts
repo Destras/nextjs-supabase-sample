@@ -1,0 +1,1 @@
+export { useEgregoresTabViewModel } from './useEgregoresTabViewModel'

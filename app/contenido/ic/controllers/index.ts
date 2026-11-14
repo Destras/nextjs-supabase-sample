@@ -1,0 +1,1 @@
+export { useIcTabViewModel } from './useIcTabViewModel'

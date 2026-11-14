@@ -1,0 +1,9 @@
+# Sin tope de tamaño de archivo para video en el cliente
+
+Los egregores son piezas de video largas, y el tope client-side de 2 GB en `validateMediaFile` las rechazaba de entrada: el terapeuta no podía cargar el archivo que efectivamente tenía. El bucket `contenidos` está deliberadamente sin tope (`file_size_limit = null`, migración `20260529154937`), así que el cliente era lo único que estorbaba. **Decidimos eliminar el tope de tamaño para `videos` y `egregores` por completo** en vez de subirlo a un número más grande: cualquier número nuevo sería igual de arbitrario y volvería a romper el día que aparezca un egregor más largo. El audio conserva su tope de 100 MB, porque un mantra de 100 MB+ es un error, no un caso de uso.
+
+## Consecuencias
+
+- No queda ninguna validación de tamaño de video en el cliente: **si ves un `if` de tamaño para video, es una regresión, no una mejora.** El tope vigente es el del bucket — `file_size_limit = "48GiB"` en `supabase/config.toml` para el stack local, y `null` (sin tope) en la base real vía la migración `20260529154937`. Por encima de todo eso manda el storage-api (`UPLOAD_FILE_SIZE_LIMIT = 50000 MiB`), que es el techo duro.
+- Leer la duración de un archivo grande tarda más — un MP4 sin faststart tiene el átomo `moov` al final, así que el browser recorre el archivo entero. Por eso `METADATA_TIMEOUT_MS` pasó de 15 s a 60 s: con el tope de 2 GB afuera, los archivos que este cambio habilita son justo los más lentos de medir, y con el timeout viejo se guardaban sin duración y en silencio.
+- El formato **sigue** validándose contra la allowlist de contenedores reproducibles. Que un video sea largo no lo hace reproducible; se evaluó aceptar cualquier `video/*` y se descartó, porque un `.mkv` sube bien y falla recién en la app del paciente, lejos de quien lo subió.

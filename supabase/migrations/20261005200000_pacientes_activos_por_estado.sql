@@ -1,0 +1,242 @@
+-- pulidoBeta / BETA-014 — "pacientes activos" del Dashboard del admin cuenta solo
+-- a los pacientes en estado `activo`.
+--
+-- Término "Paciente activo" (CONTEXT.md): activo = estado `activo` de
+-- estados_paciente. Pausados y dados de baja no cuentan; tener o no un
+-- tratamiento en curso no decide.
+--
+-- get_admin_dashboard_stats armaba su universo (CTE `activos`) con todo paciente
+-- que tuviera una asignación vigente (asignaciones_paciente.fecha_hasta null),
+-- sin mirar el estado: un paciente pausado o dado de baja seguía sumando en
+-- totales.pacientes_activos.
+--
+-- Qué cambia: el CTE `activos` suma el join a pacientes + estados_paciente y
+-- filtra `codigo = 'activo'`. Como el resto de la función se calcula sobre ese
+-- CTE, los demás agregados (nuevos_mes, score_promedio, en_mes_3,
+-- fin_tratamiento, distribucionEtapa, distribucionMes) pasan a describir el
+-- mismo conjunto: los pacientes activos.
+--
+-- Qué NO cambia: firma, security definer, stable, search_path, grant, comment,
+-- la guarda is_admin() ni la forma del jsonb (mismas claves). totales.alertas_activas
+-- sigue saliendo de derive_alertas_activas() (no pasa por el CTE).
+--
+-- Escrita a mano (`db diff` no corre en este repo). El cuerpo espeja
+-- supabase/schemas/62_rpc_admin.sql (que ya trae el mes de 28 días de BETA-018).
+
+create or replace function public.get_admin_dashboard_stats()
+returns jsonb
+language plpgsql
+security definer
+stable
+set search_path = ''
+as $$
+declare
+  v_result jsonb;
+begin
+  if not public.is_admin() then
+    raise exception 'no_autorizado' using errcode = '42501';
+  end if;
+
+  with activos as (
+    -- "Paciente activo" (CONTEXT.md) = estado `activo` de estados_paciente,
+    -- con al menos una asignación vigente (pertenece a la red). Pausados y
+    -- dados de baja quedan afuera aunque conserven la asignación; tener o no
+    -- un tratamiento en curso no decide (BETA-014).
+    select distinct ap.paciente_id
+      from public.asignaciones_paciente ap
+      join public.pacientes        pa on pa.id = ap.paciente_id
+      join public.estados_paciente ep on ep.id = pa.estado_id
+     where ap.fecha_hasta is null
+       and ep.codigo = 'activo'
+  ),
+  etapas_ranked as (
+    -- ordinal del ciclo por paciente (1,2,3…), ordenado por
+    -- coalesce(fecha_inicio, created_at::date) con desempate determinista
+    -- por id. El ::date colapsa el timestamptz a día calendario para
+    -- comparar igual que el TS (etapaOrdinal.ts). Sin el coalesce, una
+    -- etapa que nunca arrancó ordenaría última (los NULL van al final en
+    -- asc) y el "tratamiento 1" figuraría como el 2. Igual criterio que
+    -- 65_alertas.sql (derive_alertas_activas).
+    select et.id,
+           et.paciente_id,
+           et.modalidad_id,
+           et.fecha_inicio,
+           et.fecha_finalizacion,
+           et.created_at,
+           row_number() over (
+             partition by et.paciente_id
+             order by coalesce(et.fecha_inicio, et.created_at::date), et.id
+           ) as etapa_ordinal
+      from public.etapas_tratamiento et
+     where et.paciente_id in (select paciente_id from activos)
+  ),
+  paciente_meta as (
+    select a.paciente_id,
+           pa.fecha_alta,
+           -- último score cross-etapa (max fecha_respuesta)
+           (
+             select ev.score
+               from public.nivel_evaluacion   ev
+               join public.niveles            n  on n.id  = ev.nivel_id
+               join public.etapas_tratamiento et on et.id = n.etapa_id
+              where et.paciente_id = a.paciente_id
+              order by ev.fecha_respuesta desc
+              limit 1
+           )                                                            as ultimo_score,
+           ea.id                                                        as etapa_activa_id,
+           ea.etapa_ordinal,
+           ea.fecha_inicio                                              as etapa_inicio,
+           m.cantidad_niveles
+      from activos a
+      join public.pacientes pa on pa.id = a.paciente_id
+      -- etapa activa del paciente (la de fecha_finalizacion null)
+      left join lateral (
+        select er.id, er.modalidad_id, er.etapa_ordinal, er.fecha_inicio
+          from etapas_ranked er
+         where er.paciente_id = a.paciente_id
+           and er.fecha_finalizacion is null
+         order by er.fecha_inicio desc, er.id desc
+         limit 1
+      ) ea on true
+      left join public.modalidades m on m.id = ea.modalidad_id
+  ),
+  paciente_calc as (
+    select pm.paciente_id,
+           pm.fecha_alta,
+           pm.ultimo_score,
+           pm.etapa_ordinal,
+           -- arrastrado para poder comparar mes_actual = cantidad_niveles
+           -- (fin_tratamiento) sin volver a pisar paciente_meta.
+           pm.cantidad_niveles,
+           -- mes de tratamiento: bloques de 28 días desde el inicio de la
+           -- etapa activa (ADR 0011 — 4 semanas, no un mes calendario; date -
+           -- date da días y la división entera los parte: 0–27 → mes 1,
+           -- 28–55 → mes 2…), base 1, topado en cantidad_niveles (variable
+           -- por modalidad, NO hardcodeado 4). Espeja 65_alertas.sql y
+           -- mesActual.ts.
+           -- OJO: el guard de etapa_activa_id NO alcanza para una etapa creada
+           -- pero sin arrancar (fecha_inicio null) — ahí etapa_activa_id SÍ
+           -- existe. Sin la rama de etapa_inicio, current_date - NULL es
+           -- NULL, pero greatest(1, NULL) devuelve 1 (greatest/least ignoran
+           -- nulls en vez de propagarlos), y la etapa reportaría mes_actual=1
+           -- en vez de null. Cae sola en el bucket "Sin etapa" de
+           -- distribucionMes junto con quien no tiene etapa activa (DEC-3a,
+           -- un solo bucket, sin flag sin_iniciar).
+           case
+             when pm.etapa_activa_id is null then null
+             when pm.etapa_inicio    is null then null
+             else least(
+                    coalesce(pm.cantidad_niveles, 1),
+                    greatest(
+                      1,
+                      (current_date - pm.etapa_inicio) / 28 + 1
+                    )
+                  )
+           end                                                          as mes_actual
+      from paciente_meta pm
+  )
+  select jsonb_build_object(
+    'totales', jsonb_build_object(
+      'pacientes_activos', (select count(*)::int from paciente_calc),
+      'nuevos_mes', (
+        select count(*)::int
+          from paciente_calc
+         where fecha_alta is not null
+           and date_trunc('month', fecha_alta) = date_trunc('month', current_date)
+      ),
+      -- D4: alertas_activas ya NO deriva del score — es el count total del
+      -- subsistema derive_alertas_activas() (65_alertas.sql, mismo motor que
+      -- list_alertas_admin y list_terapeutas.alertas_activas). int no-nulo
+      -- (0 filas = 0 alertas, sin caso NULL vía score).
+      'alertas_activas', (
+        select count(*)::int from public.derive_alertas_activas()
+      ),
+      'score_promedio', (
+        select round(avg(ultimo_score), 1) from paciente_calc
+      ),
+      -- decisión de producto: dos counts de distribución por mes de tratamiento, para el
+      -- resumen del dashboard admin. fin_tratamiento compara contra
+      -- cantidad_niveles (no hardcodea 4) para ser robusto a otras modalidades.
+      'en_mes_3', (
+        select count(*)::int from paciente_calc where mes_actual = 3
+      ),
+      'fin_tratamiento', (
+        select count(*)::int
+          from paciente_calc
+         where mes_actual = cantidad_niveles
+      )
+    ),
+    'distribucionEtapa', coalesce((
+      select jsonb_agg(jsonb_build_object('label', d.label, 'cantidad', d.cantidad) order by d.orden)
+        from (
+          select case
+                   when pn.etapa_ordinal is null then 'Sin etapa'
+                   else pn.etapa_ordinal::text
+                 end          as label,
+                 count(*)::int as cantidad,
+                 coalesce(pn.etapa_ordinal, 2147483647) as orden
+            from paciente_calc pn
+           group by pn.etapa_ordinal
+        ) d
+    ), '[]'::jsonb),
+    'distribucionMes', (
+      -- A diferencia de distribucionEtapa (ordinal sin tope), acá el rango de
+      -- meses es conocido (1..cantidad_niveles): se emite SIEMPRE completo,
+      -- con 0 en los meses sin pacientes hoy. Si solo agrupáramos por
+      -- mes_actual (como antes) el mes vacío desaparecería del jsonb y
+      -- deriveProyeccionMesSiguiente perdería el N real (bug: la cohorte del
+      -- último mes ocupado se confundía con "cierran tratamiento").
+      with meses_totales as (
+        -- N = mayor cantidad_niveles entre los pacientes activos (max ignora
+        -- null); 0 si nadie tiene etapa activa hoy.
+        select coalesce(max(pc.cantidad_niveles), 0) as n
+          from paciente_calc pc
+      ),
+      meses_conteo as (
+        -- pacientes por mes de tratamiento, solo meses con dato (no null)
+        select pc.mes_actual, count(*)::int as cantidad
+          from paciente_calc pc
+         where pc.mes_actual is not null
+         group by pc.mes_actual
+      ),
+      meses_serie as (
+        -- la serie completa 1..N, exista o no paciente en cada mes
+        select gs.mes
+          from meses_totales, generate_series(1, meses_totales.n) as gs (mes)
+      ),
+      sin_etapa_conteo as (
+        -- bucket "Sin etapa" (mes_actual null) — no es un mes numérico, se
+        -- agrega aparte y solo si hay pacientes en esa condición
+        select count(*)::int as cantidad
+          from paciente_calc pc
+         where pc.mes_actual is null
+      )
+      select coalesce(
+               jsonb_agg(jsonb_build_object('label', d.label, 'cantidad', d.cantidad) order by d.orden),
+               '[]'::jsonb
+             )
+        from (
+          select ms.mes::text          as label,
+                 coalesce(mc.cantidad, 0) as cantidad,
+                 ms.mes                 as orden
+            from meses_serie ms
+            left join meses_conteo mc on mc.mes_actual = ms.mes
+          union all
+          select 'Sin etapa'  as label,
+                 se.cantidad   as cantidad,
+                 2147483647    as orden
+            from sin_etapa_conteo se
+           where se.cantidad > 0
+        ) d
+    )
+  )
+  into v_result;
+
+  return v_result;
+end;
+$$;
+
+comment on function public.get_admin_dashboard_stats is
+  'Agregados globales de la red para el dashboard admin: totales (pacientes activos, nuevos del mes, alertas activas, score promedio, en_mes_3, fin_tratamiento) + distribución por etapa (ordinal del ciclo) y por mes de tratamiento (bloques de 28 días desde fecha_inicio, no mes calendario — ADR 0011). distribucionMes emite SIEMPRE los meses 1..N completos (N = max cantidad_niveles entre pacientes activos), con 0 en los meses sin pacientes hoy, más el bucket "Sin etapa" aparte cuando corresponde — así el consumidor (deriveProyeccionMesSiguiente) conoce el largo real del tratamiento aunque el último mes esté vacío. distribucionEtapa sigue agrupando solo ordinales ocupados (rango no acotado). Ya NO emite distribucionCausa (decisión de producto: esa estadística vive en el diagnóstico). jsonb único. Guarda is_admin(). score_promedio NULL si ningún paciente activo tiene evaluaciones; alertas_activas (D4) es el count de derive_alertas_activas(), siempre int no-nulo. en_mes_3/fin_tratamiento son counts sobre mes_actual, este último comparado contra cantidad_niveles (no hardcodea 4) para ser robusto a otras modalidades. Modelo: etapa = tratamiento de N meses (def. modalidad), 1 eval/mes; etapa_ordinal ⊥ mes_actual. mes_actual es null tanto sin etapa activa como con etapa activa sin arrancar (fecha_inicio null) — cae en el bucket Sin etapa, sin bucket separado (DEC-3a). etapas_ranked ordena por coalesce(fecha_inicio, created_at::date) — espejado con 65_alertas.sql y etapaOrdinal.ts.';
+
+grant execute on function public.get_admin_dashboard_stats() to authenticated;

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="200" height="200" role="img" aria-label="Aurora mark — monocromático claro">
+  <path d="M 8 70 Q 50 8, 92 70" stroke="#F4EFE6" stroke-width="3.5" fill="none" stroke-linecap="round"></path>
+  <line x1="6" y1="78" x2="94" y2="78" stroke="#F4EFE6" stroke-width="0.8" opacity="0.5"></line>
+  <circle cx="50" cy="78" r="3.5" fill="#F4EFE6"></circle>
+</svg>

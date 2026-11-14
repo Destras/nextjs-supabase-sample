@@ -1,0 +1,1 @@
+export { useMantrasTabViewModel } from './useMantrasTabViewModel'

@@ -1,0 +1,6 @@
+export { useTerapeutasViewModel } from './useTerapeutasViewModel'
+export type { TerapeutasViewModel } from './useTerapeutasViewModel'
+export { useInvitarTerapeutaViewModel } from './useInvitarTerapeutaViewModel'
+export type { InvitarTerapeutaViewModel } from './useInvitarTerapeutaViewModel'
+export { useEditarTerapeutaViewModel } from './useEditarTerapeutaViewModel'
+export type { EditarTerapeutaViewModel } from './useEditarTerapeutaViewModel'

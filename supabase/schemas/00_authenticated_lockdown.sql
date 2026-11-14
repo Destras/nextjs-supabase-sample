@@ -1,0 +1,30 @@
+-- Authenticated lockdown (defense in depth) — must run BEFORE any table is created.
+--
+-- Contraparte de 00_anon_lockdown.sql, para el rol `authenticated`.
+--
+-- El bootstrap de Supabase corre el equivalente de:
+--   alter default privileges in schema public grant all on tables to authenticated;
+-- así que toda tabla creada en `public` nace con TRUNCATE y TRIGGER para
+-- cualquier usuario logueado. La migración 20260503232546_fix_permissions.sql
+-- los revocó tabla por tabla en la base real, pero ese revoke NUNCA existió del
+-- lado declarativo.
+--
+-- Consecuencia concreta, medida en local antes de escribir esto: la shadow DB
+-- que arma `supabase db diff` a partir de supabase/schemas/ era MÁS PERMISIVA
+-- que producción, y `db diff` emitía 52 statements del tipo
+--   grant truncate on table "public"."pacientes" to "authenticated";
+-- Aplicar una migración generada así le daba a cualquier paciente o terapeuta
+-- logueado TRUNCATE sobre pacientes, profiles y todo el resto. TRUNCATE ignora
+-- RLS: no es una fuga de datos, es un borrado de la tabla entera. Y sobre
+-- audit_log agregaba DELETE y UPDATE, que rompe la inmutabilidad del registro
+-- de auditoría.
+--
+-- Poner el revoke acá hace dos cosas: alinea la shadow DB con producción (la
+-- churn de 52 líneas desaparece y deja de esconder drift real), y hace que
+-- cualquier tabla NUEVA herede el lockdown sin que nadie se acuerde de revocar.
+--
+-- El acceso de lectura/escritura de `authenticated` sigue gobernado por las
+-- policies RLS de cada tabla; acá solo se sacan los privilegios que RLS no puede
+-- contener.
+alter default privileges for role postgres in schema public
+  revoke truncate, trigger on tables from authenticated;

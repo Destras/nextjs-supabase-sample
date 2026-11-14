@@ -1,0 +1,1 @@
+export { useVideosTabViewModel } from './useVideosTabViewModel'

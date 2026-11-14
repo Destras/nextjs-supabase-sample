@@ -1,0 +1,432 @@
+@import 'tailwindcss';
+@plugin "tailwindcss-animate";
+
+/* Dark mode via data-theme attribute (next-themes) */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ================================================================
+   LAYER 1 — BRAND PALETTE (rebrand-safe, purpose-named)
+   ================================================================ */
+:root {
+  /* Brand primary scale */
+  --brand-primary-300: #6fb1b6;
+  --brand-primary-500: #2e7a82;
+  --brand-primary-700: #1e6e76;
+  --brand-primary-900: #0d2e33;
+
+  /* Brand secondary scale */
+  --brand-secondary-300: #9c86c7;
+  --brand-secondary-500: #5c4585;
+  --brand-secondary-700: #3d2a5c;
+  --brand-secondary-900: #271a3d;
+
+  /* Brand accent scale */
+  --brand-accent-300: #e8cfa0;
+  --brand-accent-500: #d9b87a;
+  --brand-accent-700: #b89348;
+
+  /* ================================================================
+   LAYER 2 — SEMANTIC TOKENS · LIGHT (default)
+   ================================================================ */
+  color-scheme: light;
+
+  /* Surfaces */
+  --background: #fafaf7;
+  --foreground: #0b1418;
+  --card: #ffffff;
+  --card-foreground: #0b1418;
+  --popover: #ffffff;
+  --popover-foreground: #0b1418;
+
+  /* Actions */
+  --primary: var(--brand-primary-500);
+  --primary-foreground: #ffffff;
+  --secondary: #f4f1ea;
+  --secondary-foreground: #0b1418;
+  --accent: #f4f1ea;
+  --accent-foreground: #0b1418;
+  --muted: #f4f1ea;
+  --muted-foreground: #6b7682;
+
+  /* Destructive (shadcn standard) */
+  --destructive: #b43f35;
+  --destructive-foreground: #ffffff;
+  --destructive-bg: #fbeae7;
+
+  /* Status extensions (no shadcn by default) */
+  --success: #2f8056;
+  --success-foreground: #ffffff;
+  --success-bg: #e5f1ea;
+  --warning: #b87a18;
+  --warning-foreground: #ffffff;
+  --warning-bg: rgba(184, 122, 24, 0.08);
+  /* info intentionally matches --brand-primary-700: the brand's teal reads as informational in this domain */
+  --info: #1e6e76;
+  --info-foreground: #ffffff;
+  --info-bg: rgba(30, 110, 118, 0.08);
+
+  /* Form chrome */
+  --border: #e8e3d6;
+  --input: #e8e3d6;
+  --ring: var(--brand-primary-500);
+
+  /* Base radius — shadcn components may reference var(--radius) directly */
+  --radius: 14px;
+}
+
+/* ================================================================
+   LAYER 2 — SEMANTIC TOKENS · DARK (override)
+   ================================================================ */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --background: #0b1418;
+  --foreground: #f4efe6;
+  --card: #0f1c22;
+  --card-foreground: #f4efe6;
+  --popover: #14242b;
+  --popover-foreground: #f4efe6;
+
+  --primary: var(--brand-accent-500);
+  --primary-foreground: #0b1418;
+  --secondary: #14242b;
+  --secondary-foreground: #f4efe6;
+  --accent: #14242b;
+  --accent-foreground: #f4efe6;
+  --muted: #14242b;
+  --muted-foreground: rgba(244, 239, 230, 0.55);
+
+  --destructive: #c4756b;
+  --destructive-foreground: #f4efe6;
+  --destructive-bg: rgba(196, 117, 107, 0.12);
+
+  --success: #8fbfa0;
+  --success-foreground: #0b1418;
+  --success-bg: rgba(143, 191, 160, 0.12);
+  --warning: #e8b964;
+  --warning-foreground: #0b1418;
+  --warning-bg: rgba(232, 185, 100, 0.12);
+  /* info intentionally matches --brand-primary-300: lighter teal works as informational on dark surfaces */
+  --info: #6fb1b6;
+  --info-foreground: #0b1418;
+  --info-bg: rgba(111, 177, 182, 0.12);
+
+  --border: rgba(244, 239, 230, 0.08);
+  --input: rgba(244, 239, 230, 0.08);
+  --ring: var(--brand-accent-500);
+}
+
+/* ================================================================
+   @theme — Tailwind v4 utility generation
+   ================================================================ */
+@theme {
+  /* Fonts */
+  --font-sans: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-display: var(--font-fraunces), 'IBM Plex Sans', Georgia, serif;
+
+  /* Login panel decorative glows — translucent brand colors for the radial
+     gradients on the left panel. Defined as vars so color-mix() is not
+     needed inside @utility (Lightning CSS strips color-mix + var combos). */
+  --login-glow-primary: rgba(46, 122, 130, 0.4);
+  --login-glow-secondary: rgba(92, 69, 133, 0.45);
+
+  /* Letter-spacing tokens */
+  --tracking-tight: -0.025em;
+  --tracking-display: -0.015em;
+  --tracking-body: -0.005em;
+  --tracking-mono: 0.18em;
+  --tracking-eyebrow: 0.22em;
+
+  /* Line-height tokens */
+  --leading-tight: 1.05;
+  --leading-display: 1.2;
+  --leading-body: 1.5;
+  --leading-loose: 1.6;
+
+  /* Box shadows — Aurora warm-tinted (light mode optimized) */
+  --shadow-sm:
+    0 1px 3px rgba(11, 20, 24, 0.06), 0 1px 2px rgba(11, 20, 24, 0.04);
+  --shadow-md:
+    0 4px 16px rgba(11, 20, 24, 0.08), 0 2px 4px rgba(11, 20, 24, 0.04);
+  --shadow-lg:
+    0 16px 48px rgba(11, 20, 24, 0.12), 0 4px 12px rgba(11, 20, 24, 0.05);
+
+  /* Transition durations */
+  --duration-fast: 150ms;
+  --duration-base: 250ms;
+  --duration-slow: 450ms;
+
+  /* Layer 1 — brand palette utilities (bg-brand-primary-500, text-brand-accent-700, etc.) */
+  --color-brand-primary-300: var(--brand-primary-300);
+  --color-brand-primary-500: var(--brand-primary-500);
+  --color-brand-primary-700: var(--brand-primary-700);
+  --color-brand-primary-900: var(--brand-primary-900);
+  --color-brand-secondary-300: var(--brand-secondary-300);
+  --color-brand-secondary-500: var(--brand-secondary-500);
+  --color-brand-secondary-700: var(--brand-secondary-700);
+  --color-brand-secondary-900: var(--brand-secondary-900);
+  --color-brand-accent-300: var(--brand-accent-300);
+  --color-brand-accent-500: var(--brand-accent-500);
+  --color-brand-accent-700: var(--brand-accent-700);
+
+  /* Layer 2 — shadcn semantic utilities (bg-primary, text-foreground, etc.) */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-bg: var(--destructive-bg);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-bg: var(--success-bg);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-bg: var(--warning-bg);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-bg: var(--info-bg);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Border radius — derived from --radius base (14px) */
+  --radius-sm: calc(var(--radius) - 8px);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 6px);
+  --radius-2xl: calc(var(--radius) + 14px);
+  --radius-full: 100px;
+}
+
+/* ================================================================
+   BASE — automatic styles per HTML element
+   ================================================================ */
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: var(--leading-body);
+    letter-spacing: var(--tracking-body);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Display (IBM Plex Sans) — clinical headings */
+  h1 {
+    font-family: var(--font-display);
+    font-size: var(--text-3xl);
+    line-height: var(--leading-tight);
+    letter-spacing: var(--tracking-display);
+    font-weight: 500;
+  }
+  h2 {
+    font-family: var(--font-display);
+    font-size: var(--text-2xl);
+    line-height: var(--leading-display);
+    letter-spacing: var(--tracking-display);
+    font-weight: 500;
+  }
+  h3 {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    line-height: var(--leading-display);
+    letter-spacing: var(--tracking-display);
+    font-weight: 500;
+  }
+  h4 {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    line-height: var(--leading-display);
+    font-weight: 500;
+  }
+  h5 {
+    font-family: var(--font-display);
+    font-size: var(--text-base);
+    line-height: var(--leading-body);
+    font-weight: 600;
+  }
+  h6 {
+    font-family: var(--font-display);
+    font-size: var(--text-sm);
+    line-height: var(--leading-body);
+    font-weight: 600;
+  }
+
+  /* Mono (Geist Mono) — code and technical labels */
+  code,
+  pre,
+  kbd,
+  samp {
+    font-family: var(--font-mono);
+  }
+}
+
+/* ================================================================
+   UTILITIES — Aurora helpers
+   ================================================================ */
+
+/* Eyebrows — uppercase mono labels (used in nav sections, page heads, etc.) */
+@utility eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+@utility eyebrow-sm {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+/* Brand gradients — composed from Layer 1 palette tokens */
+@utility bg-gradient-brand {
+  background: linear-gradient(
+    135deg,
+    var(--brand-primary-500) 0%,
+    var(--brand-secondary-500) 55%,
+    var(--brand-accent-500) 100%
+  );
+}
+
+@utility bg-gradient-avatar {
+  background: linear-gradient(
+    135deg,
+    var(--brand-secondary-500),
+    var(--brand-primary-500)
+  );
+}
+
+@utility bg-gradient-chart {
+  background: linear-gradient(
+    180deg,
+    var(--brand-primary-500),
+    var(--brand-secondary-500)
+  );
+}
+
+/* Soft brand gradient — para fondos hero / login en dark mode */
+@utility bg-gradient-brand-soft {
+  background: linear-gradient(
+    160deg,
+    var(--brand-primary-900) 0%,
+    var(--brand-secondary-900) 60%,
+    var(--card) 100%
+  );
+}
+
+/* Login decorative panel background — dual radial glows over the dark surface.
+   Must be used on an element that has data-theme="dark" so var(--background)
+   resolves to the dark base color (#0b1418).
+   Note: glow colors are pre-mixed CSS vars (--login-glow-*) because
+   color-mix(var()) combos are stripped by Lightning CSS inside @utility. */
+@utility bg-login-panel {
+  background:
+    radial-gradient(
+      ellipse 80% 50% at 20% 100%,
+      var(--login-glow-primary),
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 60% 40% at 80% 0%,
+      var(--login-glow-secondary),
+      transparent 60%
+    ),
+    var(--background);
+}
+
+/* ================================================================
+   LOGIN TYPOGRAPHY — Fraunces · Instrument Serif
+   ================================================================
+   Scoped exclusively to auth/login (left decorative panel, always dark).
+
+   All four utilities reference var(--font-fraunces) / var(--font-instrument-serif)
+   directly — those are Next.js runtime CSS vars set on <body> that cascade
+   correctly to all descendants. Tailwind v4 does NOT emit custom @theme font
+   tokens to :root as live CSS vars, so chaining through --font-login-display
+   breaks at runtime; removed from @theme to avoid the auto-generated clash.
+
+   font-login-display        — Fraunces regular. Brand name, h2 heading.
+   font-login-wonky          — Fraunces + WONK axis (stylistic alternates).
+                               Use only for large isolated glyphs (opening quote).
+   font-login-display-italic — Fraunces italic. For <em> in the h2.
+   font-login-quote          — Instrument Serif italic. Quote body text.
+
+   Do NOT use any of these utilities outside auth/login.
+   ================================================================ */
+@utility font-login-display {
+  font-family: var(--font-fraunces), Georgia, serif;
+}
+
+@utility font-login-wonky {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-optical-sizing: auto;
+  font-variation-settings:
+    'SOFT' 0,
+    'WONK' 1;
+}
+
+@utility font-login-display-italic {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-style: italic;
+}
+
+@utility font-login-quote {
+  font-family: var(--font-instrument-serif), Georgia, serif;
+  font-style: italic;
+}
+
+/* ================================================================
+   LOGIN TEXT COLOR UTILITIES
+   ================================================================
+   Tailwind v4 resolves @theme token chains (--color-foreground:
+   var(--foreground)) eagerly at :root. This means text-foreground,
+   text-primary, etc. always use the root-level values and DO NOT
+   cascade from a child data-theme="dark" div.
+
+   These utilities reference the raw CSS vars (--foreground,
+   --muted-foreground, --primary) which DO cascade correctly from
+   the left panel's data-theme="dark" attribute.
+
+   Use ONLY inside the left login panel. The right panel and the
+   rest of the app can keep using standard Tailwind color utilities.
+   ================================================================ */
+
+.login-text-foreground {
+  color: var(--foreground);
+}
+
+.login-text-muted {
+  color: var(--muted-foreground);
+}
+
+.login-text-primary {
+  color: var(--primary);
+}
+
+/* Sets foreground at 80% opacity — mirrors text-foreground/80 but
+   uses the raw var so it cascades from data-theme="dark" correctly. */
+.login-text-faded {
+  color: var(--foreground);
+  opacity: 0.8;
+}
